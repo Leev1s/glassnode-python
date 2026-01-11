@@ -9,7 +9,7 @@ from .utils import endpoint_to_column_name
 MetricInput = Union[
     str,
     Sequence[str],
-    Mapping[str, Union[str, Mapping[str, Any]]],
+    Mapping[str, Union[str, Mapping[str, Any], None]],
 ]
 
 
@@ -123,11 +123,13 @@ def _descriptor_from_endpoint(
     return MetricDescriptor(endpoint=endpoint, column=column, multi=False), column.lower()
 
 
-def _descriptor_from_spec(alias: str, spec: Union[str, Mapping[str, Any]]) -> MetricDescriptor:
+def _descriptor_from_spec(alias: str, spec: Union[str, Mapping[str, Any], None]) -> MetricDescriptor:
+    if spec is None:
+        return _descriptor_from_alias(alias)
     if isinstance(spec, str):
         return MetricDescriptor(endpoint=spec, column=_alias_to_column(alias), multi=False)
     if not isinstance(spec, Mapping):
-        raise TypeError("metric specification must be a string or mapping")
+        raise TypeError("metric specification must be a string, mapping, or None")
     endpoint = spec.get("endpoint")
     if not endpoint:
         raise ValueError("metric specification requires an 'endpoint' field")
