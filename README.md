@@ -25,16 +25,12 @@ Glassnode API toolkit with a yfinance-style interface.
 ## 📦 Installation
 
 ```bash
-pip install glassnode-python           # coming soon on PyPI
+pip install glassnode-python           # install from PyPI (v0.3.0+)
 pip install -e .[test]                 # developer setup
 pip install -e .[viz]                  # Plotly dashboard extras
 ```
 
-Until the project is on PyPI you can install straight from the repository root:
-
-```bash
-pip install .
-```
+If you prefer a local checkout, run `pip install .` from the repo root.
 
 ---
 
