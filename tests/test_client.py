@@ -1,9 +1,12 @@
 import threading
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 import pytest
+import requests
 
+import glassnode_python
+import glassnode_python.client as client_module
 from glassnode_python import GlassnodeClient
 
 BASE_URL = "https://api.glassnode.com"
@@ -13,20 +16,26 @@ MARKETCAP_ENDPOINT = "/v1/metrics/market/marketcap_usd"
 
 
 class MockResponse:
-    def __init__(self, payload: List[Dict[str, Any]], status_code: int = 200) -> None:
+    def __init__(
+        self,
+        payload: List[Dict[str, Any]],
+        status_code: int = 200,
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> None:
         self.payload = payload
         self.status_code = status_code
+        self.headers = dict(headers or {})
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise RuntimeError("mock error")
+            raise requests.HTTPError(response=self)
 
     def json(self) -> List[Dict[str, Any]]:
         return self.payload
 
 
 class MockSession:
-    def __init__(self, payloads: Mapping[Tuple[str, str], List[Dict[str, Any]]]) -> None:
+    def __init__(self, payloads: Mapping[Tuple[str, str], Any]) -> None:
         self.payloads = dict(payloads)
         self.calls: List[Dict[str, Any]] = []
         self.lock = threading.Lock()
@@ -41,7 +50,14 @@ class MockSession:
             call = {"url": url, "params": dict(params)}
             call.update(kwargs)
             self.calls.append(call)
-        return MockResponse(self.payloads[key])
+        payload = self.payloads[key]
+        if isinstance(payload, list) and payload and isinstance(payload[0], MockResponse):
+            response = payload.pop(0)
+        elif isinstance(payload, MockResponse):
+            response = payload
+        else:
+            response = MockResponse(payload)
+        return response
 
 
 def ohlc_payload(start_ts: int) -> List[Dict[str, Any]]:
@@ -172,3 +188,79 @@ def test_unknown_metric_alias_raises_key_error():
             verbose=False,
             parallel=False,
         )
+
+
+def test_download_retries_when_rate_limited(monkeypatch):
+    payloads = {
+        ("BTC", PRICE_ENDPOINT): [
+            MockResponse([], status_code=429, headers={"Retry-After": "0"}),
+            MockResponse(value_payload(0, 10)),
+        ]
+    }
+    session = MockSession(payloads)
+    client = GlassnodeClient(
+        api_key="retry",
+        session=session,
+        auto_env=False,
+        max_retries=2,
+        retry_backoff=0,
+    )
+
+    frame = client.download(
+        tickers="BTC",
+        start="2024-01-01",
+        end="2024-01-02",
+        metrics=["price"],
+        verbose=False,
+        parallel=False,
+    )
+
+    assert not frame.empty
+    assert len(session.calls) == 2
+
+
+def test_module_download_accepts_client_instance():
+    payloads = {("BTC", PRICE_ENDPOINT): value_payload(0, 10)}
+    session = MockSession(payloads)
+    client = GlassnodeClient(api_key="client", session=session, auto_env=False)
+
+    frame = glassnode_python.download(
+        ["BTC"],
+        client=client,
+        start="2024-01-01",
+        end="2024-01-03",
+        metrics=["price"],
+        verbose=False,
+        parallel=False,
+    )
+
+    assert not frame.empty
+
+
+def test_module_download_instantiate_client_when_api_key_provided(monkeypatch):
+    created: Dict[str, Any] = {}
+
+    class DummyClient:
+        def __init__(self, **kwargs: Any) -> None:
+            created["kwargs"] = kwargs
+
+        def download(self, **kwargs: Any) -> pd.DataFrame:
+            created["download_kwargs"] = kwargs
+            index = pd.date_range("2024-01-01", periods=1, freq="D")
+            return pd.DataFrame({"Value": [1]}, index=index)
+
+    monkeypatch.setattr(client_module, "GlassnodeClient", DummyClient)
+    monkeypatch.setattr(client_module, "_default_client", None)
+
+    frame = glassnode_python.download(
+        "BTC",
+        api_key="explicit",
+        metrics=["price"],
+        start="2024-01-01",
+        end="2024-01-02",
+        verbose=False,
+        parallel=False,
+    )
+
+    assert not frame.empty
+    assert created["kwargs"]["api_key"] == "explicit"

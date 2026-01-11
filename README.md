@@ -21,18 +21,24 @@ pip install .
 ## Quickstart
 ```python
 from glassnode_python import download, get_price
+from dotenv import load_dotenv
+import os
 
-# Export your API key: export GLASSNODE_API_KEY=... (or use a .env file)
-df = download("BTC", period="3mo")
+# Load your API key explicitly
+load_dotenv()
+api_key = os.environ["GLASSNODE_API_KEY"]
+
+df = download("BTC", period="3mo", api_key=api_key)
 prices = get_price(["BTC", "ETH"], period="1y", interval="24h", parallel=True)
 rich = download(
 	["BTC", "ETH"],
 	period="6mo",
 	metrics=["ohlc", "price", "marketcap"],
 	threads=True,
+	api_key=api_key,
 )
 # group_by="ticker" makes the column index match yfinance's default order
-by_ticker = download(["BTC", "ETH"], period="1mo", group_by="ticker")
+by_ticker = download(["BTC", "ETH"], period="1mo", group_by="ticker", api_key=api_key)
 ```
 For fine-grained control instantiate the client directly:
 ```python
@@ -66,6 +72,17 @@ download(
 )
 ```
 Every alias cooperates with `group_by` so you can switch between `("Attribute", "Ticker")` and `("Ticker", "Attribute")` column orders just like yfinance.
+
+## TradingView-style dashboard
+
+To spin up an interactive viewer powered by Plotly, install the optional visualization extras and run the bundled script:
+
+```bash
+pip install -e .[viz]
+python scripts/eth_sol_tradingview.py
+```
+
+The script pulls a full year of daily OHLC candles for ETH and SOL directly from Glassnode using your `GLASSNODE_API_KEY`, overlays 20/50-day EMAs, and opens a browser window with TradingView-like zoom, pan, and hover interactions.
 
 ## Environment variables
 The client reads `GLASSNODE_API_KEY` automatically when a key is not supplied manually. You can create a `.env` file next to your notebook or script:

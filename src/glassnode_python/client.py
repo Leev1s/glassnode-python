@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 import os
+import time
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import pandas as pd
@@ -19,6 +20,7 @@ DEFAULT_INTERVAL = "24h"
 DEFAULT_PERIOD = "1mo"
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_TIMEOUT = 30
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 TickerInput = Union[str, Sequence[str]]
 DateInput = Union[str, datetime, None]
@@ -45,6 +47,8 @@ class GlassnodeClient:
         auto_env: bool = True,
         proxies: Optional[Mapping[str, str]] = None,
         headers: Optional[Mapping[str, str]] = None,
+        max_retries: int = 3,
+        retry_backoff: float = 2.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -60,6 +64,8 @@ class GlassnodeClient:
         self.api_key = api_key
         self.proxies = _normalize_proxy_mapping(proxies)
         self.headers = dict(headers) if headers else None
+        self.max_retries = max(1, int(max_retries))
+        self.retry_backoff = max(0.0, float(retry_backoff))
 
     def download(
         self,
@@ -323,9 +329,43 @@ class GlassnodeClient:
         headers = dict(self.headers) if self.headers else {}
         if headers:
             kwargs.setdefault("headers", headers)
-        response = self.session.get(url, params=request_params, **kwargs)
-        response.raise_for_status()
-        return response.json()
+        attempts = self.max_retries
+        last_error: Optional[Exception] = None
+        for attempt in range(1, attempts + 1):
+            response = self.session.get(url, params=request_params, **kwargs)
+            status = getattr(response, "status_code", None)
+            try:
+                response.raise_for_status()
+                return response.json()
+            except requests.HTTPError as exc:
+                last_error = exc
+                if status in RETRY_STATUS_CODES and attempt < attempts:
+                    time.sleep(self._retry_wait(response, attempt))
+                    continue
+                raise
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt < attempts:
+                    time.sleep(self._retry_wait(None, attempt))
+                    continue
+                raise
+        if last_error:
+            raise last_error
+        raise RuntimeError("Unspecified request failure")
+
+    def _retry_wait(
+        self,
+        response: Optional[requests.Response],
+        attempt: int,
+    ) -> float:
+        if response is not None:
+            retry_after = response.headers.get("Retry-After") if hasattr(response, "headers") else None
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except ValueError:
+                    pass
+        return self.retry_backoff * max(1, attempt)
 
 
 def _normalize_proxy_mapping(proxies: Optional[Mapping[str, str]]) -> Optional[Dict[str, str]]:
@@ -357,21 +397,33 @@ def get_default_client() -> GlassnodeClient:
     return _default_client
 
 
-def download(**kwargs: Any) -> pd.DataFrame:
-    return get_default_client().download(**kwargs)
+def download(
+    tickers: TickerInput,
+    /,
+    *,
+    client: Optional[GlassnodeClient] = None,
+    api_key: Optional[str] = None,
+    **kwargs: Any,
+) -> pd.DataFrame:
+    if client is not None:
+        return client.download(tickers=tickers, **kwargs)
+    if api_key is not None:
+        temp_client = GlassnodeClient(api_key=api_key, auto_env=False)
+        return temp_client.download(tickers=tickers, **kwargs)
+    return get_default_client().download(tickers=tickers, **kwargs)
 
 
 def get_ohlc(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
-    return download(tickers=tickers, endpoint=DEFAULT_ENDPOINT, **kwargs)
+    return download(tickers, endpoint=DEFAULT_ENDPOINT, **kwargs)
 
 
 def get_price(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
-    return download(tickers=tickers, endpoint="/v1/metrics/market/price_usd_close", **kwargs)
+    return download(tickers, endpoint="/v1/metrics/market/price_usd_close", **kwargs)
 
 
 def get_marketcap(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
     return download(
-        tickers=tickers,
+        tickers,
         endpoint="/v1/metrics/market/marketcap_usd",
         **kwargs,
     )
@@ -379,11 +431,11 @@ def get_marketcap(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
 
 def get_volume(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
     return download(
-        tickers=tickers,
+        tickers,
         endpoint="/v1/metrics/market/spot_volume_daily_sum",
         **kwargs,
     )
 
 
 def get_mvrv(tickers: TickerInput, **kwargs: Any) -> pd.DataFrame:
-    return download(tickers=tickers, endpoint="/v1/metrics/market/mvrv", **kwargs)
+    return download(tickers, endpoint="/v1/metrics/market/mvrv", **kwargs)
