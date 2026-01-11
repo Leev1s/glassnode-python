@@ -2,7 +2,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from glassnode_python.utils import compute_time_range, period_to_seconds
+from glassnode_python.utils import (
+    compute_time_range,
+    endpoint_to_column_name,
+    period_to_seconds,
+)
 
 
 def test_period_to_seconds_supports_days_months_years():
@@ -28,3 +32,8 @@ def test_compute_time_range_honors_explicit_dates():
         end="2024-01-05T00:00:00Z",
     )
     assert end_ts - start_ts == 4 * 24 * 3600
+
+
+def test_endpoint_to_column_name_generates_camel_case():
+    assert endpoint_to_column_name("/v1/metrics/market/price_usd_close") == "PriceUsdClose"
+    assert endpoint_to_column_name("/metrics/simple") == "Simple"

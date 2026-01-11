@@ -9,6 +9,7 @@ from .client import (
     get_price,
     get_volume,
 )
+from .metrics import METRIC_ALIASES
 from .utils import period_to_seconds
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "get_price",
     "get_volume",
     "period_to_seconds",
+    "METRIC_ALIASES",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -115,3 +115,11 @@ def parse_series(items: Iterable[Mapping[str, Any]]) -> pd.DataFrame:
         return frame
     frame = frame.set_index("Date").sort_index()
     return frame
+
+def endpoint_to_column_name(endpoint: str) -> str:
+    """Convert the last path fragment of an endpoint into a CamelCase column name."""
+    slug = (endpoint or "").strip("/").split("/")[-1]
+    if not slug:
+        return "Metric"
+    parts = [part for part in slug.split("_") if part]
+    return "".join(part.capitalize() for part in parts) or "Metric"
