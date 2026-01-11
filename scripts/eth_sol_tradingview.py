@@ -49,7 +49,8 @@ def main() -> None:
 def _add_overlays(candles: pd.DataFrame) -> pd.DataFrame:
     data = candles.copy()
     for window in EMA_WINDOWS:
-        data[f"EMA{window}"] = data["Close"].ewm(span=window, adjust=False).mean()
+        column = f"ema{window}"
+        data[column] = data["close"].ewm(span=window, adjust=False).mean()
     return data
 
 
@@ -59,10 +60,10 @@ def _build_layout(data: Dict[str, pd.DataFrame]) -> go.Figure:
         fig.add_trace(
             go.Candlestick(
                 x=frame.index,
-                open=frame["Open"],
-                high=frame["High"],
-                low=frame["Low"],
-                close=frame["Close"],
+                open=frame["open"],
+                high=frame["high"],
+                low=frame["low"],
+                close=frame["close"],
                 name=f"{ticker} OHLC",
                 showlegend=False,
             ),
@@ -70,10 +71,11 @@ def _build_layout(data: Dict[str, pd.DataFrame]) -> go.Figure:
             col=1,
         )
         for window in EMA_WINDOWS:
+            column = f"ema{window}"
             fig.add_trace(
                 go.Scatter(
                     x=frame.index,
-                    y=frame[f"EMA{window}"],
+                    y=frame[column],
                     name=f"{ticker} EMA {window}",
                     mode="lines",
                     line=dict(width=1.4),

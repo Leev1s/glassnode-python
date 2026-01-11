@@ -2,9 +2,9 @@
 
 # glassnode-python
 
-Glassnode API toolkit with a yfinance-style interface.
+Glassnode API client with a yfinance-style `download()` helper.
 
-[Chinese version](README_CN.md)
+[中文文档](README_CN.md)
 
 </div>
 
@@ -14,8 +14,8 @@ Glassnode API toolkit with a yfinance-style interface.
 
 | Capability | Details |
 | --- | --- |
-| yfinance-style `download()` | Mirrors `yfinance.download` semantics including `period`, `interval`, `metrics`, `threads`, `group_by`, and progress hooks. |
-| Multi-metric alias registry | Built-in alias table for price, OHLC, marketcap, and other endpoints, plus support for custom endpoint dictionaries. |
+| yfinance-like ergonomics | Single `download()` entry point covering `period`, `interval`, `metrics`, `group_by`, `threads`, `progress`, and more. |
+| Metric alias registry | Built-in aliases for `price`, `ohlc`, `marketcap`, etc., plus the ability to mix in custom endpoint mappings. |
 | Request resilience | Injects API keys automatically, supports proxy-aware `requests.Session`, and retries with exponential backoff on 429/50x responses. |
 | Pandas-native output | DateTime index + MultiIndex columns flow directly into NumPy, pandas, polars, or backtesting engines. |
 | Visualization ready | Bundled Plotly script launches a TradingView-style ETH/SOL dashboard with one command. |
@@ -25,7 +25,7 @@ Glassnode API toolkit with a yfinance-style interface.
 ## 📦 Installation
 
 ```bash
-pip install glassnode-python           # install from PyPI (v0.3.0+)
+pip install glassnode-python           # install from PyPI (v0.3.2+)
 pip install -e .[test]                 # developer setup
 pip install -e .[viz]                  # Plotly dashboard extras
 ```
@@ -88,7 +88,7 @@ download(
 	"ETH",
 	metrics={
 		"sopr": {"endpoint": "/v1/metrics/market/sopr"},
-		"ohlc": {"endpoint": "/v1/metrics/market/price_usd_ohlc", "multi": True},
+		"ohlc": None,  # reuse built-in alias, columns become ohlc_open/high/low/close
 		"fees": {
 			"endpoint": "/v1/metrics/transactions/transfers_volume_sum",
 			"column": "TransferVolume",
@@ -96,7 +96,12 @@ download(
 	},
 	api_key=api_key,
 )
+
 ```
+
+**Column naming**
+- OHLC metrics expose lowercase `open/high/low/close` columns.
+- All other metrics are renamed to the lowercase version of their alias (e.g. `price`, `myfees`).
 
 ### Full-control client
 
@@ -130,12 +135,12 @@ df = client.download(
 
 | Alias | Endpoint | Columns |
 | --- | --- | --- |
-| `ohlc` | `/v1/metrics/market/price_usd_ohlc` | `Open, High, Low, Close` |
-| `price` | `/v1/metrics/market/price_usd_close` | `Price` |
-| `marketcap` | `/v1/metrics/market/marketcap_usd` | `Marketcap` |
-| `volume` | `/v1/metrics/market/spot_volume_daily_sum` | `Volume` |
-| `mvrv` | `/v1/metrics/market/mvrv` | `Mvrv` |
-| `realizedcap` | `/v1/metrics/market/realizedcap_usd` | `RealizedCap` |
+| `ohlc` | `/v1/metrics/market/price_usd_ohlc` | `open, high, low, close` |
+| `price` | `/v1/metrics/market/price_usd_close` | `price` |
+| `marketcap` | `/v1/metrics/market/marketcap_usd` | `marketcap` |
+| `volume` | `/v1/metrics/market/spot_volume_daily_sum` | `volume` |
+| `mvrv` | `/v1/metrics/market/mvrv` | `mvrv` |
+| `realizedcap` | `/v1/metrics/market/realizedcap_usd` | `realizedcap` |
 
 Aliases respect `group_by`, `rounding`, and fill methods so the dataframe layout stays predictable.
 
@@ -149,7 +154,7 @@ python scripts/eth_sol_tradingview.py
 ```
 
 - Fetches one year of daily OHLC candles for ETH and SOL (sequential mode to stay within rate limits).
-- Adds EMA20/EMA50 overlays plus Plotly dark theme, linked hover, and full zoom/pan controls.
+- Adds ema20/ema50 overlays plus Plotly dark theme, linked hover, and full zoom/pan controls.
 - Customize via the `EMA_WINDOWS` constant or export HTML with `fig.write_html()`.
 
 ---

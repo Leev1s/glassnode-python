@@ -25,7 +25,7 @@
 ## 📦 安装
 
 ```bash
-pip install glassnode-python           # 即将发布到 PyPI
+pip install glassnode-python           # PyPI 稳定发行版（>=0.3.2）
 pip install -e .[test]                 # 本地开发依赖
 pip install -e .[viz]                  # Plotly 看板可选组件
 ```
@@ -92,7 +92,7 @@ download(
     "ETH",
     metrics={
         "sopr": {"endpoint": "/v1/metrics/market/sopr"},
-        "ohlc": {"endpoint": "/v1/metrics/market/price_usd_ohlc", "multi": True},
+        "ohlc": None,  # 复用内置别名，列将命名为 ohlc_open / high / low / close
         "fees": {
             "endpoint": "/v1/metrics/transactions/transfers_volume_sum",
             "column": "TransferVolume",
@@ -100,7 +100,12 @@ download(
     },
     api_key=api_key,
 )
+
 ```
+
+**列命名约定**
+- `ohlc` 指标输出小写的 `open/high/low/close` 列。
+- 其他指标都会把列名重命名为对应 alias 的小写形式（例如 `price`、`myfees`）。
 
 ### 4. 完全自定义客户端
 
@@ -134,12 +139,12 @@ df = client.download(
 
 | 别名 | Endpoint | 列名 |
 | --- | --- | --- |
-| `ohlc` | `/v1/metrics/market/price_usd_ohlc` | `Open, High, Low, Close` |
-| `price` | `/v1/metrics/market/price_usd_close` | `Price` |
-| `marketcap` | `/v1/metrics/market/marketcap_usd` | `Marketcap` |
-| `volume` | `/v1/metrics/market/spot_volume_daily_sum` | `Volume` |
-| `mvrv` | `/v1/metrics/market/mvrv` | `Mvrv` |
-| `realizedcap` | `/v1/metrics/market/realizedcap_usd` | `RealizedCap` |
+| `ohlc` | `/v1/metrics/market/price_usd_ohlc` | `open, high, low, close` |
+| `price` | `/v1/metrics/market/price_usd_close` | `price` |
+| `marketcap` | `/v1/metrics/market/marketcap_usd` | `marketcap` |
+| `volume` | `/v1/metrics/market/spot_volume_daily_sum` | `volume` |
+| `mvrv` | `/v1/metrics/market/mvrv` | `mvrv` |
+| `realizedcap` | `/v1/metrics/market/realizedcap_usd` | `realizedcap` |
 
 所有别名都支持 `group_by`、`rounding`、`fill_method` 等参数，DataFrame 结构保持一致。
 
@@ -153,7 +158,7 @@ python scripts/eth_sol_tradingview.py
 ```
 
 - 顺序请求 ETH/SOL 一年日 K，规避 Glassnode 限速。
-- 内置 EMA20/EMA50、暗色主题、联动 Hover、缩放/拖拽操作。
+- 内置 ema20/ema50、暗色主题、联动 Hover、缩放/拖拽操作。
 - 可修改 `EMA_WINDOWS` 添加 RSI/MACD，或用 `fig.write_html()` 输出静态报告。
 
 ---

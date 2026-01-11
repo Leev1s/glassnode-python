@@ -82,39 +82,38 @@ def compute_time_range(
     return int(start_dt.timestamp()), int(end_dt.timestamp())
 
 
+_OHLC_FIELD_MAP = {"o": "open", "h": "high", "l": "low", "c": "close"}
+
+
 def parse_series(items: Iterable[Mapping[str, Any]]) -> pd.DataFrame:
     data = list(items)
     if not data:
         return pd.DataFrame()
+
     rows = []
     for entry in data:
         ts = entry.get("t")
         if ts is None:
             continue
-        base: MutableMapping[str, Any] = {"Date": pd.to_datetime(ts, unit="s", utc=True)}
-        if "o" in entry and isinstance(entry["o"], Mapping):
-            ohlc = entry["o"]
-            base.update(
-                {
-                    "Open": ohlc.get("o"),
-                    "High": ohlc.get("h"),
-                    "Low": ohlc.get("l"),
-                    "Close": ohlc.get("c"),
-                }
-            )
+
+        base: MutableMapping[str, Any] = {"date": pd.to_datetime(ts, unit="s", utc=True)}
+        ohlc = entry.get("o")
+        if isinstance(ohlc, Mapping):
+            base.update({name: ohlc.get(code) for code, name in _OHLC_FIELD_MAP.items()})
         elif "v" in entry:
-            base["Value"] = entry.get("v")
+            base["value"] = entry.get("v")
         else:
             for key, value in entry.items():
                 if key == "t":
                     continue
                 base[key] = value
+
         rows.append(base)
+
     frame = pd.DataFrame(rows)
     if frame.empty:
         return frame
-    frame = frame.set_index("Date").sort_index()
-    return frame
+    return frame.set_index("date").sort_index()
 
 def endpoint_to_column_name(endpoint: str) -> str:
     """Convert the last path fragment of an endpoint into a CamelCase column name."""

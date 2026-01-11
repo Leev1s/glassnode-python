@@ -91,8 +91,8 @@ def test_download_combines_multiple_tickers():
     )
 
     assert isinstance(frame.index, pd.DatetimeIndex)
-    assert ("Open", "BTC") in frame.columns
-    assert ("Close", "ETH") in frame.columns
+    assert ("open", "BTC") in frame.columns
+    assert ("close", "ETH") in frame.columns
 
 
 def test_download_injects_api_key_and_handles_parallel():
@@ -151,7 +151,26 @@ def test_metric_aliases_return_named_columns():
         parallel=False,
     )
 
-    assert list(frame.columns) == ["Price", "Marketcap"]
+    assert list(frame.columns) == ["price", "marketcap"]
+
+
+def test_custom_metric_mapping_uses_lowercase_column():
+    payloads = {
+        ("BTC", PRICE_ENDPOINT): value_payload(0, 10),
+    }
+    session = MockSession(payloads)
+    client = GlassnodeClient(api_key="custom", session=session, auto_env=False)
+
+    frame = client.download(
+        tickers="BTC",
+        start="2024-01-01",
+        end="2024-01-05",
+        metrics={"MyPrice": {"endpoint": PRICE_ENDPOINT}},
+        verbose=False,
+        parallel=False,
+    )
+
+    assert list(frame.columns) == ["myprice"]
 
 
 def test_group_by_ticker_swaps_levels():
@@ -171,7 +190,7 @@ def test_group_by_ticker_swaps_levels():
         parallel=False,
     )
 
-    assert ("BTC", "Open") in frame.columns
+    assert ("BTC", "open") in frame.columns
     assert frame.columns.names == ["Ticker", "Attribute"]
 
 

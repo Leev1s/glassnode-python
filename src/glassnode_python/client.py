@@ -206,12 +206,16 @@ class GlassnodeClient:
         ]
 
     def _prepare_plan_frame(self, frame: pd.DataFrame, plan: MetricPlan) -> pd.DataFrame:
-        if plan.multi:
-            return frame
-        target = plan.column or plan.label
-        if list(frame.columns) == ["Value"]:
-            return frame.rename(columns={"Value": target})
-        return frame.add_prefix(f"{target}_")
+        label = self._format_metric_label(plan.alias or plan.column or plan.label)
+        if label == "ohlc":
+            return frame.rename(columns={col: str(col).lower() for col in frame.columns})
+
+        columns = list(frame.columns)
+        if len(columns) == 1 and str(columns[0]).lower() == "value":
+            return frame.rename(columns={columns[0]: label})
+
+        rename_map = {col: f"{label}_{str(col).lower()}" for col in frame.columns}
+        return frame.rename(columns=rename_map)
 
     def _finalize_output(
         self,
@@ -248,6 +252,13 @@ class GlassnodeClient:
             elif group_by.lower() == "ticker":
                 result = result.sort_index(axis=1)
         return result
+
+    @staticmethod
+    def _format_metric_label(value: Optional[str]) -> str:
+        text = (value or "").strip()
+        if not text:
+            text = "Metric"
+        return text.replace(" ", "_").lower()
 
     def _download_parallel(
         self,
